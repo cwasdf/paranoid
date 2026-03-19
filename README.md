@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./paranoid_logo.png" alt="Paranoid" width="40" />
+  <img src="./paranoid_logo.png" alt="Paranoid" width="96" />
 
   <h1>Paranoid</h1>
 
