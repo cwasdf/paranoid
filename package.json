@@ -1,0 +1,25 @@
+{
+  "name": "paranoid",
+  "version": "3.0.0",
+  "description": "Paranoid macOS discovery scanner using the OpenAI Responses API.",
+  "scripts": {
+    "start": "bash ./paranoid_scanner.sh",
+    "setup": "bash ./setup.sh",
+    "quickstart": "bash ./openai_api_quickstart.sh \"Summarize what this scanner does in 2 lines.\"",
+    "dev": "bash ./paranoid_scanner.sh",
+    "lint": "bash ./scripts/lint.sh",
+    "test:syntax": "bash -n ./paranoid_env_loader.sh ./paranoid_scanner.sh ./paranoid_macos_tools.sh ./paranoid_threat_intel.sh ./setup.sh ./openai_api_quickstart.sh ./cmdbot_env_loader.sh ./cmdbot_paranoid_scanner.sh ./cmdbot_macos_tools.sh ./cmdbot_threat_intel.sh",
+    "test": "npm run lint && npm run test:syntax"
+  },
+  "keywords": [
+    "security",
+    "macos",
+    "threat-detection",
+    "scanner",
+    "openai-responses-api"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

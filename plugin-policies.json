@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "plugins": {
+    "com.paranoid.plugin.write": {
+      "publisher_key_id": "paranoid-publisher-01",
+      "min_version": "1.0.0",
+      "max_version": "1.99.99",
+      "allowed_capabilities": [
+        "write.patch_text",
+        "write.atomic_replace",
+        "write.create_backup",
+        "write.append_if_missing",
+        "write.remove_if_present",
+        "write.json_patch",
+        "write.plist_patch",
+        "read.scan"
+      ],
+      "allowed_targets": [
+        "~/Documents/**",
+        "~/Library/Application Support/Paranoid/**",
+        "~/Library/LaunchAgents/**",
+        "$CMDBOT_WORKDIR/**",
+        "$CMDBOT_FINDINGS_DIR/**"
+      ],
+      "forbidden_targets": [
+        "/System/**",
+        "/Library/**",
+        "/Applications/**",
+        "/private/var/db/**",
+        "/usr/**",
+        "/bin/**",
+        "/sbin/**",
+        "/opt/**",
+        "~/.ssh/**",
+        "~/.gnupg/**",
+        "~/.Trash/**",
+        "~/Library/Keychains/**",
+        "~/Library/Cookies/**",
+        "~/Library/Group Containers/**",
+        "~/Library/Mail/**"
+      ],
+      "exec_timeout_sec": 10,
+      "max_actions_per_invocation": 20,
+      "max_file_size_bytes": 10485760
+    }
+  }
+}

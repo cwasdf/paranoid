@@ -1,0 +1,199 @@
+# Part I — Platform Trust Foundations
+system_profiler SPHardwareDataType SPiBridgeDataType -detailLevel full
+nvram -p
+bless --info --getBoot
+ioreg -l -p IODeviceTree | grep -iE 'secure|sep|boot|chip|firmware'
+kmutil showloaded --list-only --variant-suffix release --arch arm64
+kmutil inspect --boot --arch arm64 --variant-suffix release --show-dependencies
+sudo bputil -d
+sudo bputil -d -j
+sudo bputil -a -d
+sudo bputil -v 01234567-89AB-CDEF-0123-456789ABCDEF -d
+sudo bputil -r 01234567-89AB-CDEF-0123-456789ABCDEF
+sudo bputil -z
+csrutil status
+csrutil enable
+csrutil disable
+csrutil authenticated-root status
+csrutil authenticated-root enable
+csrutil authenticated-root disable
+
+# Part II — Identity, Authentication, and Authorization
+sudo diskutil apfs listUsers /
+dscl . -search /Users GeneratedUID <GUID>
+sudo profiles install -type bootstraptoken
+sudo profiles remove -type bootstraptoken
+sudo profiles status -type bootstraptoken
+sudo profiles validate -type bootstraptoken
+sysadminctl -h
+pwpolicy -getaccountpolicies
+pwpolicy -getglobalpolicy
+odutil show configuration
+odutil show statistics
+security authorizationdb read system.login.console
+security authorizationdb read system.preferences
+security authorizationdb read system.services.systemconfiguration.network
+dseditgroup -o read admin
+dseditgroup -o read wheel
+dseditgroup -o read _lpadmin
+sc_auth status
+sc_auth identities
+sc_auth list
+sudo sc_auth enable
+sudo sc_auth disable
+
+# Part III — Data Protection
+fdesetup status
+fdesetup status -verbose
+sudo fdesetup list
+sudo fdesetup list -extended
+fdesetup haspersonalrecoverykey
+fdesetup hasinstitutionalrecoverykey
+sudo fdesetup changerecovery -personal
+sudo fdesetup changerecovery -institutional -certificate /path/to/FileVaultMaster.cer
+sudo fdesetup removerecovery -personal
+sudo fdesetup removerecovery -institutional
+diskutil list
+diskutil apfs list
+diskutil info /System/Volumes/Data
+diskutil apfs listVolumeGroups
+security list-keychains
+security show-keychain-info ~/Library/Keychains/login.keychain-db
+security find-identity -v -p codesigning
+security find-identity -v -p ssl-client
+security find-identity -v -p ssl-server
+security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain
+hdiutil create -size 20g -fs APFS -type SPARSEBUNDLE -encryption AES-256 -volname SecureVault -stdinpass ~/SecureVault.sparsebundle
+hdiutil attach -readonly -nobrowse -stdinpass ~/SecureVault.sparsebundle
+hdiutil verify -verbose ~/SecureVault.sparsebundle
+tmutil listlocalsnapshots /
+sudo tmutil deletelocalsnapshots 2026-02-16-120102
+tmutil destinationinfo
+
+# Part IV — Application Trust & Execution Control
+spctl --status
+spctl --assess --type execute --verbose=4 /Applications/Safari.app
+spctl --assess --type install --verbose=4 /path/to/SomeInstaller.pkg
+sudo spctl --master-enable
+sudo spctl --master-disable
+sudo spctl --add --label LocalAllow /path/to/Allowed.app
+sudo spctl --enable --label LocalAllow
+sudo spctl --disable --label LocalAllow
+sudo spctl --remove --label LocalAllow
+spctl --list --verbose
+codesign --verify --deep --strict --verbose=4 /path/to/App.app
+codesign -d --verbose=4 /path/to/App.app
+codesign -d --entitlements :- /path/to/App.app
+xattr -p com.apple.quarantine /path/to/Downloaded.app
+xattr -l /path/to/Downloaded.app
+xattr -d com.apple.quarantine /path/to/Downloaded.app
+stapler validate /path/to/Downloaded.app
+tccutil reset AddressBook
+tccutil reset Camera
+tccutil reset Microphone
+tccutil reset SystemPolicyAllFiles
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump
+plutil -p ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist
+plutil -p "$HOME/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm" 2>/dev/null
+mdls -name kMDItemWhereFroms -name kMDItemDownloadedDate -name kMDItemFSName /path/to/Artifact
+mdls -raw -name kMDItemCFBundleIdentifier -name kMDItemVersion /Applications/SomeApp.app
+otool -l /Applications/SomeApp.app/Contents/MacOS/SomeApp | grep -nE "LC_CODE_SIGNATURE|LC_DYLD_CHAINED_FIXUPS|LC_DYLD_EXPORTS_TRIE"
+
+# Part V — Network Surface Reduction
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getblockall
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setblockall on
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setblockall off
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode off
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getallowsigned
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setallowsigned
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setallowsignedapp
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /path/to/App.app
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getappblocked /path/to/App.app
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --blockapp /path/to/App.app
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp /path/to/App.app
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --remove /path/to/App.app
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getloggingmode
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingmode on
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingopt detail
+sudo pfctl -sr
+sudo pfctl -sn
+sudo pfctl -s states
+scutil --dns
+scutil --proxy
+networksetup -listallnetworkservices
+networksetup -getdnsservers Wi-Fi
+networksetup -getwebproxy Wi-Fi
+networksetup -getsecurewebproxy Wi-Fi
+networksetup -getsocksfirewallproxy Wi-Fi
+lsof -nP -iTCP -sTCP:LISTEN
+lsof -nP -iTCP -sTCP:ESTABLISHED
+netstat -s -p tcp
+netstat -s -p udp
+netstat -s -p ip
+/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I
+/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s
+
+# Part VI — System Services & Privilege Boundaries
+launchctl print system
+launchctl print system/com.apple.auditd
+launchctl bootstrap system /Library/LaunchDaemons/com.example.daemon.plist
+launchctl bootout system /Library/LaunchDaemons/com.example.daemon.plist
+launchctl kickstart -k system/com.example.daemon
+launchctl print gui/$(id -u)
+launchctl print gui/$(id -u)/com.example.agent
+launchctl kickstart -k gui/$(id -u)/com.example.agent
+systemextensionsctl list
+sudo systemextensionsctl reset
+sudo systemextensionsctl developer on
+sudo systemextensionsctl developer off
+ls -la /Library/LaunchDaemons
+ls -la /System/Library/LaunchDaemons
+ls -la ~/Library/LaunchAgents
+ls -la /Library/LaunchAgents
+ls -la /System/Library/LaunchAgents
+plutil -p /Library/LaunchDaemons/com.example.daemon.plist
+plutil -extract ProgramArguments xml1 -o - /Library/LaunchDaemons/com.example.daemon.plist
+plutil -extract KeepAlive xml1 -o - /Library/LaunchDaemons/com.example.daemon.plist
+sudo visudo -c
+sudo -l
+
+# Part VII — Update & Supply-Chain Integrity
+sudo profiles list
+sudo profiles show -type configuration
+sudo profiles install -type configuration -path /path/to/profile.mobileconfig
+sudo profiles remove -identifier com.example.profile
+sudo profiles renew -type enrollment
+pkgutil --check-signature /path/to/SomeInstaller.pkg
+pkgutil --pkg-info-plist com.example.pkgid
+pkgutil --files com.example.pkgid
+pkgutil --expand-full /path/to/SomeInstaller.pkg /tmp/SomeInstaller.expanded
+pkgutil --flatten /tmp/SomeInstaller.expanded /tmp/SomeInstaller.repacked.pkg
+softwareupdate --list --verbose
+defaults read /Library/Preferences/com.apple.SoftwareUpdate CatalogURL
+softwareupdate --fetch-full-installer --full-installer-version 14.3.1
+softwareupdate --background-critical
+
+# Part VIII — Logging, Detection, and Response
+log show --last 1h --style syslog --predicate '(subsystem == "com.apple.securityd") OR (subsystem == "com.apple.syspolicy")' --info
+log show --last 24h --style compact --predicate '(process == "syspolicyd") OR (process == "trustd")' --info
+log stream --style syslog --level debug --predicate '(subsystem == "com.apple.EndpointSecurity") OR (eventMessage CONTAINS "AMFI")'
+sudo cat /etc/security/audit_control
+ls -la /var/audit
+sudo praudit /var/audit/*
+sudo auditreduce -c lo -c ad -c ex /var/audit/* | praudit
+sudo auditreduce -u 501 /var/audit/* | praudit
+sudo eslogger openssh_login openssh_logout > out.jsonl
+sudo eslogger openssh_login openssh_logout
+sudo ls -la /usr/lib/cron/tabs
+sudo crontab -l
+crontab -l
+grep -R --line-number -E 'DYLD_|LD_LIBRARY_PATH|PATH=' ~/.zshenv ~/.zprofile ~/.zshrc ~/.bash_profile ~/.bashrc 2>/dev/null
+find /Library/LaunchDaemons /Library/LaunchAgents ~/Library/LaunchAgents -type f -mtime -7 -print
+
+echo "ExampleCommands"

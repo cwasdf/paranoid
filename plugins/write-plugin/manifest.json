@@ -1,0 +1,37 @@
+{
+  "plugin_id": "com.paranoid.plugin.write",
+  "name": "Write Plugin",
+  "version": "1.0.0",
+  "api_version": "1",
+  "entrypoint": "./plugin",
+  "runtime": "python3",
+  "capabilities": [
+    "write.patch_text",
+    "write.atomic_replace",
+    "write.create_backup",
+    "write.append_if_missing",
+    "write.remove_if_present",
+    "read.scan"
+  ],
+  "allowed_targets": [
+    "~/Documents/**",
+    "~/Library/Application Support/Paranoid/**",
+    "~/Library/LaunchAgents/**"
+  ],
+  "forbidden_targets": [
+    "/System/**",
+    "/Library/**",
+    "/Applications/**",
+    "/private/var/db/**",
+    "~/.ssh/**",
+    "~/.gnupg/**"
+  ],
+  "hash": {
+    "algorithm": "sha256",
+    "executable": "9b312b9e9cc69a243fe922c2f4eeb46f88234a704e56d526d9ccdcb42cb054c2"
+  },
+  "publisher": {
+    "name": "Paranoid Security",
+    "key_id": "paranoid-publisher-01"
+  }
+}

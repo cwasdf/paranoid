@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+"""
+Paranoid Scanner — Write Plugin (Proposal Engine)
+
+This plugin NEVER performs writes directly. It analyzes targets and proposes
+structured actions that the core app brokers through its own policy-checked,
+atomic, audited write path.
+
+Protocol:
+  stdin  — JSON request from core
+  stdout — JSON response (actions/errors)
+  stderr — diagnostics only
+  exit 0 — success
+  exit 1 — malformed input or fatal error
+"""
+
+import json
+import os
+import sys
+import hashlib
+from pathlib import Path
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+
+def err(msg):
+    print(msg, file=sys.stderr)
+
+
+def fail(code, message, details=None):
+    """Return a structured error and exit."""
+    resp = {"status": "error", "error": {"code": code, "message": message}}
+    if details:
+        resp["error"]["details"] = details
+    json.dump(resp, sys.stdout, indent=2)
+    print()
+    sys.exit(1)
+
+
+def expand_path(p):
+    return str(Path(os.path.expanduser(os.path.expandvars(p))).resolve())
+
+
+def path_matches_pattern(path, pattern):
+    """Check if path matches a glob-style allow/deny pattern."""
+    pattern = os.path.expanduser(os.path.expandvars(pattern))
+    if pattern.endswith("/**"):
+        prefix = pattern[:-3]
+        prefix = str(Path(prefix).resolve())
+        return path.startswith(prefix + "/") or path == prefix
+    resolved_pattern = str(Path(pattern).resolve())
+    return path == resolved_pattern
+
+
+def path_is_allowed(path, allowed, forbidden):
+    """Check path against allow/deny lists. Deny takes precedence."""
+    for pat in forbidden:
+        if path_matches_pattern(path, pat):
+            return False
+    for pat in allowed:
+        if path_matches_pattern(path, pat):
+            return True
+    return False
+
+
+def validate_target(target, allowed_targets, forbidden_targets):
+    """Validate a target path. Returns (resolved_path, error_or_None)."""
+    if not target:
+        return None, "empty target path"
+    resolved = expand_path(target)
+    if not os.path.exists(resolved):
+        return resolved, "target does not exist"
+    if os.path.isdir(resolved):
+        return resolved, "target is a directory, not a file"
+    size = os.path.getsize(resolved)
+    if size > MAX_FILE_SIZE:
+        return resolved, f"target exceeds max file size ({size} > {MAX_FILE_SIZE})"
+    if not path_is_allowed(resolved, allowed_targets, forbidden_targets):
+        return resolved, "target path not in allowed targets or blocked by forbidden targets"
+    return resolved, None
+
+
+def file_hash(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ── Proposal Builders ────────────────────────────────────────────────────────
+
+def propose_text_patch(target, find, replace, reason, backup=True):
+    resolved = expand_path(target)
+    try:
+        with open(resolved, "r") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return {
+            "type": "error",
+            "target": resolved,
+            "reason": f"cannot read target: {e}",
+        }
+
+    if find not in content:
+        return {
+            "type": "error",
+            "target": resolved,
+            "reason": f"pattern not found in target: {find!r}",
+        }
+
+    occurrences = content.count(find)
+    new_content = content.replace(find, replace)
+
+    if new_content == content:
+        return {
+            "type": "report",
+            "capability": "read.scan",
+            "target": resolved,
+            "reason": "no change needed — file already matches desired state",
+            "idempotent": True,
+        }
+
+    return {
+        "type": "write_patch_text",
+        "capability": "write.patch_text",
+        "target": resolved,
+        "reason": reason,
+        "create_backup": backup,
+        "patch": {
+            "format": "line_replace",
+            "find": find,
+            "replace": replace,
+            "occurrences": occurrences,
+        },
+        "rollback_hint": f"Restore from backup file ({resolved}.bak)",
+        "idempotent": new_content.replace(find, replace) == new_content,
+        "before_hash": file_hash(resolved),
+    }
+
+
+def propose_atomic_replace(target, new_content, reason, backup=True):
+    resolved = expand_path(target)
+    try:
+        with open(resolved, "r") as f:
+            old_content = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return {
+            "type": "error",
+            "target": resolved,
+            "reason": f"cannot read target: {e}",
+        }
+
+    if old_content == new_content:
+        return {
+            "type": "report",
+            "capability": "read.scan",
+            "target": resolved,
+            "reason": "no change needed — file already matches desired content",
+            "idempotent": True,
+        }
+
+    return {
+        "type": "write_replace_file",
+        "capability": "write.atomic_replace",
+        "target": resolved,
+        "reason": reason,
+        "create_backup": backup,
+        "new_content": new_content,
+        "rollback_hint": f"Restore from backup file ({resolved}.bak)",
+        "idempotent": True,
+        "before_hash": file_hash(resolved),
+    }
+
+
+def propose_append(target, content, reason, backup=True):
+    resolved = expand_path(target)
+    try:
+        with open(resolved, "r") as f:
+            existing = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return {
+            "type": "error",
+            "target": resolved,
+            "reason": f"cannot read target: {e}",
+        }
+
+    if content in existing:
+        return {
+            "type": "report",
+            "capability": "read.scan",
+            "target": resolved,
+            "reason": "content already present — no append needed",
+            "idempotent": True,
+        }
+
+    return {
+        "type": "write_patch_text",
+        "capability": "write.append_if_missing",
+        "target": resolved,
+        "reason": reason,
+        "create_backup": backup,
+        "patch": {
+            "format": "append_if_missing",
+            "content": content,
+        },
+        "rollback_hint": f"Restore from backup file ({resolved}.bak)",
+        "idempotent": True,
+        "before_hash": file_hash(resolved),
+    }
+
+
+def propose_remove(target, pattern, reason, backup=True):
+    resolved = expand_path(target)
+    try:
+        with open(resolved, "r") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return {
+            "type": "error",
+            "target": resolved,
+            "reason": f"cannot read target: {e}",
+        }
+
+    if pattern not in content:
+        return {
+            "type": "report",
+            "capability": "read.scan",
+            "target": resolved,
+            "reason": "pattern not found — nothing to remove",
+            "idempotent": True,
+        }
+
+    return {
+        "type": "write_patch_text",
+        "capability": "write.remove_if_present",
+        "target": resolved,
+        "reason": reason,
+        "create_backup": backup,
+        "patch": {
+            "format": "remove_if_present",
+            "pattern": pattern,
+        },
+        "rollback_hint": f"Restore from backup file ({resolved}.bak)",
+        "idempotent": True,
+        "before_hash": file_hash(resolved),
+    }
+
+
+# ── Mode Handlers ────────────────────────────────────────────────────────────
+
+def handle_scan(request, allowed_targets, forbidden_targets):
+    """Scan targets and report findings (read-only)."""
+    targets = request.get("targets", [])
+    if not targets:
+        return {"status": "ok", "actions": []}
+
+    actions = []
+    for t in targets:
+        resolved = expand_path(t)
+        if not os.path.exists(resolved):
+            actions.append({
+                "type": "report",
+                "capability": "read.scan",
+                "target": resolved,
+                "reason": "target does not exist",
+                "severity": "info",
+            })
+            continue
+
+        if not path_is_allowed(resolved, allowed_targets, forbidden_targets):
+            actions.append({
+                "type": "report",
+                "capability": "read.scan",
+                "target": resolved,
+                "reason": "target outside allowed paths — skipped",
+                "severity": "info",
+            })
+            continue
+
+        try:
+            stat = os.stat(resolved)
+            actions.append({
+                "type": "report",
+                "capability": "read.scan",
+                "target": resolved,
+                "reason": "target accessible",
+                "severity": "info",
+                "details": {
+                    "size": stat.st_size,
+                    "mode": oct(stat.st_mode),
+                    "uid": stat.st_uid,
+                    "mtime": stat.st_mtime,
+                    "hash": file_hash(resolved) if stat.st_size <= MAX_FILE_SIZE else "skipped_too_large",
+                },
+            })
+        except OSError as e:
+            actions.append({
+                "type": "report",
+                "capability": "read.scan",
+                "target": resolved,
+                "reason": f"cannot stat: {e}",
+                "severity": "warning",
+            })
+
+    return {"status": "ok", "actions": actions}
+
+
+def handle_propose(request, allowed_targets, forbidden_targets):
+    """Propose write actions based on the request."""
+    proposals = request.get("proposals", [])
+    if not proposals:
+        fail("missing_proposals", "propose mode requires a 'proposals' array in request")
+
+    actions = []
+    for p in proposals:
+        target = p.get("target", "")
+        capability = p.get("capability", "")
+        reason = p.get("reason", "no reason given")
+        backup = p.get("create_backup", True)
+        dry_run = p.get("dry_run", False)
+
+        resolved, path_err = validate_target(target, allowed_targets, forbidden_targets)
+        if path_err:
+            actions.append({
+                "type": "error",
+                "target": resolved or target,
+                "reason": f"target validation failed: {path_err}",
+            })
+            continue
+
+        if capability == "write.patch_text":
+            find = p.get("find", "")
+            replace = p.get("replace", "")
+            if not find:
+                actions.append({
+                    "type": "error",
+                    "target": resolved,
+                    "reason": "patch_text requires 'find' field",
+                })
+                continue
+            action = propose_text_patch(resolved, find, replace, reason, backup)
+
+        elif capability == "write.atomic_replace":
+            new_content = p.get("new_content", "")
+            if not new_content:
+                actions.append({
+                    "type": "error",
+                    "target": resolved,
+                    "reason": "atomic_replace requires 'new_content' field",
+                })
+                continue
+            action = propose_atomic_replace(resolved, new_content, reason, backup)
+
+        elif capability == "write.append_if_missing":
+            content = p.get("content", "")
+            if not content:
+                actions.append({
+                    "type": "error",
+                    "target": resolved,
+                    "reason": "append_if_missing requires 'content' field",
+                })
+                continue
+            action = propose_append(resolved, content, reason, backup)
+
+        elif capability == "write.remove_if_present":
+            pattern = p.get("pattern", "")
+            if not pattern:
+                actions.append({
+                    "type": "error",
+                    "target": resolved,
+                    "reason": "remove_if_present requires 'pattern' field",
+                })
+                continue
+            action = propose_remove(resolved, pattern, reason, backup)
+
+        else:
+            actions.append({
+                "type": "error",
+                "target": resolved,
+                "reason": f"unsupported capability: {capability}",
+            })
+            continue
+
+        if dry_run and action.get("type", "").startswith("write_"):
+            action["dry_run"] = True
+            action["type"] = "dry_run_" + action["type"]
+
+        actions.append(action)
+
+    return {"status": "ok", "actions": actions}
+
+
+def handle_validate(request, allowed_targets, forbidden_targets):
+    """Validate a proposed action without executing it."""
+    action = request.get("action")
+    if not action:
+        fail("missing_action", "validate mode requires an 'action' object in request")
+
+    target = action.get("target", "")
+    capability = action.get("capability", "")
+
+    resolved, path_err = validate_target(target, allowed_targets, forbidden_targets)
+    checks = {
+        "target_exists": path_err is None or "does not exist" not in (path_err or ""),
+        "target_allowed": path_err is None or "not in allowed" not in (path_err or ""),
+        "target_readable": False,
+        "target_writable": False,
+        "capability_declared": capability in [
+            "write.patch_text", "write.atomic_replace", "write.create_backup",
+            "write.append_if_missing", "write.remove_if_present", "read.scan",
+        ],
+        "size_ok": True,
+    }
+
+    if resolved and os.path.exists(resolved):
+        checks["target_readable"] = os.access(resolved, os.R_OK)
+        checks["target_writable"] = os.access(resolved, os.W_OK)
+        size = os.path.getsize(resolved)
+        checks["size_ok"] = size <= MAX_FILE_SIZE
+
+    all_ok = all(checks.values())
+    return {
+        "status": "ok" if all_ok else "error",
+        "validation": {
+            "target": resolved or target,
+            "capability": capability,
+            "checks": checks,
+            "passed": all_ok,
+            "error": path_err,
+        },
+    }
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def main():
+    raw = sys.stdin.read().strip()
+    if not raw:
+        fail("empty_input", "no JSON input received on stdin")
+
+    try:
+        request = json.loads(raw)
+    except json.JSONDecodeError as e:
+        fail("invalid_json", f"malformed JSON input: {e}")
+
+    if not isinstance(request, dict):
+        fail("invalid_input", "input must be a JSON object")
+
+    mode = request.get("mode", "")
+    allowed_targets = request.get("allowedTargets", [])
+    forbidden_targets = request.get("forbiddenTargets", [])
+    req_body = request.get("request", {})
+
+    if mode == "scan":
+        result = handle_scan(req_body, allowed_targets, forbidden_targets)
+    elif mode == "propose":
+        result = handle_propose(req_body, allowed_targets, forbidden_targets)
+    elif mode == "validate":
+        result = handle_validate(req_body, allowed_targets, forbidden_targets)
+    elif mode == "dry_run":
+        if "request" in request:
+            request["request"].setdefault("proposals", [])
+            for p in request["request"].get("proposals", []):
+                p["dry_run"] = True
+        result = handle_propose(req_body, allowed_targets, forbidden_targets)
+    else:
+        fail("unknown_mode", f"unsupported mode: {mode!r}")
+
+    json.dump(result, sys.stdout, indent=2)
+    print()
+
+
+if __name__ == "__main__":
+    main()
