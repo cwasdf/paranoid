@@ -14,9 +14,9 @@
   </p>
 </div>
 
-## What It Does
+<span><strong>⚠️ WARNING: This project is experimental and under active development. It has not been validated or hardened for production use and should NOT be deployed in production environments or relied upon as a primary security control.</strong></span>
 
-> <span style="color:red"><strong>⚠️ WARNING: This project is experimental and under active development. It has not been validated or hardened for production use and should NOT be deployed in production environments or relied upon as a primary security control.</strong></span>
+## What It Does
 
 - Runs structured security probes across persistence, network activity, binary integrity, privacy, and permissions.
 - Uses native tool calling (`/v1/responses`) to restrict model execution to explicitly registered tools.
