@@ -6,12 +6,6 @@
   <p>
     LLM-driven macOS security investigation using the OpenAI Responses API with native tool calling.
   </p>
-
-  <p>
-    <img alt="Status" src="https://img.shields.io/badge/status-active-success" />
-    <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-black" />
-    <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-Responses_API-412991" />
-  </p>
 </div>
 
 <span><strong>⚠️ WARNING: This project is experimental and under active development. It has not been validated or hardened for production use and should NOT be deployed in production environments or relied upon as a primary security control.</strong></span>
