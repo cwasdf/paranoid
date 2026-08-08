@@ -16,10 +16,13 @@
 
 ## What It Does
 
-- Runs structured security probes across persistence, network, binary integrity, privacy, and permissions.
-- Uses native tool calling (`/v1/responses`) so the model can only execute registered tools.
-- Stores full evidence locally in `paranoid_findings/` and returns compact summaries to the model.
-- Supports optional threat-intel enrichment (YARA, VirusTotal hash lookup, abuse.ch, CIRCL).
+> **Warning:** This project is experimental and under active development. It has not been validated or hardened for production use and should **not** be deployed in production environments or relied upon as a primary security control.
+
+- Runs structured security probes across persistence, network activity, binary integrity, privacy, and permissions.
+- Uses native tool calling (`/v1/responses`) to restrict model execution to explicitly registered tools.
+- Stores full supporting evidence locally in `paranoid_findings/` while returning compact summaries to the model.
+- Supports optional threat-intelligence enrichment through YARA, VirusTotal hash lookups, abuse.ch, and CIRCL.
+- Intended for research, testing, evaluation, and controlled experimental environments while the project remains in an experimental stage.
 
 ## Safety and Scope
 
