@@ -2,12 +2,10 @@
   <img src="./paranoid_logo.png" alt="Paranoid" width="96" />
 
   <h1>Paranoid</h1>
-
-  <p>
-    LLM-driven macOS security investigation using the OpenAI Responses API with native tool calling.
-  </p>
 </div>
-
+<p>
+  LLM-driven macOS security investigation using the OpenAI Responses API with native tool calling.
+</p>
 <span><strong>⚠️ WARNING: This project is experimental and under active development. It has not been validated or hardened for production use and should NOT be deployed in production environments or relied upon as a primary security control.</strong></span>
 
 ## What It Does
